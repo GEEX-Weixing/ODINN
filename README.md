@@ -79,7 +79,3 @@ python test.py --checkpoint checkpoints/pubmed_DeGroot_fold0.pt
 ```
 
 The checkpoint stores the model hyperparameters and split metadata used by `train.py`, so `test.py` can reconstruct the model and split automatically.
-
-## Notes on cleanup
-
-Removed from the original working directory: IDE files, macOS artifacts, Python bytecode caches, local dataset caches, duplicated scripts, and baseline script references without corresponding implementation. The release contains no author names, personal paths, local logs, or trained weights.
