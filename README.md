@@ -1,4 +1,4 @@
-# ODINN Anonymous Release
+# ODINN
 
 This is a cleaned, anonymous, runnable version of the ODINN project for paper review. It keeps only the core model, data loading, training/evaluation, and shell scripts needed to reproduce ODINN-DeGroot and ODINN-Friedkin-Johnsen experiments.
 
