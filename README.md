@@ -1,81 +1,68 @@
-# ODINN
+# ODINN Few-Shot Reproduction
 
-This is a cleaned, anonymous, runnable version of the ODINN project for paper review. It keeps only the core model, data loading, training/evaluation, and shell scripts needed to reproduce ODINN-DeGroot and ODINN-Friedkin-Johnsen experiments.
+Minimal release containing only the ODINN model and the few-shot node-classification experiments used in the paper.
 
-## Contents
+## Included
+
+- **ODINN-DG** and **ODINN-FJ** implementations.
+- **Homophilous few-shot experiments** on Cora, Pubmed, Amazon Computers, Amazon Photo, Coauthor CS, Coauthor Physics, Wiki-CS, and OGBN-Arxiv.
+- **Heterophilous few-shot experiments** on Chameleon, Squirrel, Amazon-Ratings, and Penn94.
+- The paper setting of **1/3/5 labeled nodes per class**, **30 random splits**, and candidate propagation depths **K = 10/20/40**.
+
+No baseline implementations, sensitivity studies, learned-weight visualization, runtime experiments, long-term dynamics experiments, high-shot sweeps, or ablation scripts are included.
+
+## Structure
 
 ```text
-ODINN_clean/
-├── models/                 # ODINN-DeGroot and ODINN-FJ implementations
-├── src/                    # dataset loading, splitting, graph preprocessing, metrics
-├── scripts/                # runnable experiment scripts
-├── train.py                # train + validation + test evaluation
-├── test.py                 # evaluate a saved checkpoint
+ODINN_fewshot_release/
+├── README.md
 ├── requirements.txt
-├── data/                   # empty placeholder; datasets download here
-├── checkpoints/            # empty placeholder; checkpoints are saved here
-└── logs/                   # empty placeholder; JSON/CSV logs are saved here
+├── data/
+│   └── README.md
+├── src/
+│   ├── odinn.py
+│   ├── odinn_heterophily.py
+│   ├── odinn_weight_init.py
+│   ├── graph_ops.py
+│   ├── training.py
+│   ├── data.py
+│   ├── data_heterophily.py
+│   └── io_utils.py
+├── experiments/
+│   ├── fewshot_homophily.py
+│   └── fewshot_heterophily.py
+└── scripts/
+    ├── run_fewshot_homophily.sh
+    └── run_fewshot_heterophily.sh
 ```
 
 ## Installation
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-For CUDA, install the PyTorch build that matches your CUDA version before installing the remaining packages.
+Prepare the datasets under `data/` first.
 
-## Supported datasets
+## Run
 
-The code supports:
-
-- `pubmed` via `torch_geometric.datasets.Planetoid`
-- `wiki_cs` via `torch_geometric.datasets.WikiCS`
-- `photo` via `torch_geometric.datasets.Amazon(name="Photo")`
-- `ogbn-arxiv` via `ogb.nodeproppred.PygNodePropPredDataset`
-
-Datasets are not included in this anonymous package. They are downloaded and cached under `data/` automatically by PyG/OGB.
-
-## Train
-
-Run one experiment manually:
+Homophilous graphs:
 
 ```bash
-python train.py --dataset pubmed --model_name DeGroot --label_rate 1 --num_layers 10 --epochs 400 --folds 10
-python train.py --dataset pubmed --model_name Friedkin_Johnsen --label_rate 1 --num_layers 10 --epochs 400 --folds 10
+bash scripts/run_fewshot_homophily.sh
 ```
 
-Or use the provided scripts:
+Heterophilous graphs:
 
 ```bash
-bash scripts/train_pubmed.sh
-bash scripts/train_wiki_cs.sh
-bash scripts/train_photo.sh
-bash scripts/train_ogbn_arxiv.sh
+bash scripts/run_fewshot_heterophily.sh
 ```
 
-Run all four dataset scripts:
+You can pass additional arguments through the shell scripts, for example:
 
 ```bash
-bash scripts/run_all.sh
+bash scripts/run_fewshot_homophily.sh --datasets cora pubmed --models dg fj --cpu
+bash scripts/run_fewshot_heterophily.sh --datasets chameleon penn94 --cpu
 ```
 
-## Splits
-
-By default, `--split generated` creates stratified few-shot splits. `--label_rate` is the number of labeled nodes sampled per class; fractional legacy values are rounded up to at least one sample per class.
-
-For `ogbn-arxiv`, you can use the OGB official split instead:
-
-```bash
-python train.py --dataset ogbn-arxiv --split official --model_name DeGroot --num_layers 20
-```
-
-## Test a saved checkpoint
-
-```bash
-python test.py --checkpoint checkpoints/pubmed_DeGroot_fold0.pt
-```
-
-The checkpoint stores the model hyperparameters and split metadata used by `train.py`, so `test.py` can reconstruct the model and split automatically.
+Each experiment writes all runs to `results/` and produces a summary in which the propagation depth is selected using mean validation accuracy over the 30 splits.
