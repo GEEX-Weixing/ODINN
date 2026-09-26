@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.utils import add_self_loops, degree
 
-from .odinn_weight_init import gpr_like_init
+from .odinn_weight_init import balanced_init, ppr_init
 
 
 def row_propagate(x: torch.Tensor, edge_index: torch.Tensor, add_loops: bool = False) -> torch.Tensor:
@@ -42,14 +42,11 @@ class ODINNEncoder(nn.Module):
 
 
 class ODINNDG(nn.Module):
-    def __init__(self, in_dim, hidden, out_dim, dropout=0.6, hops=20,
-                 weight_init="ppr", ppr_alpha=0.1, nppr_alpha=-0.5):
+    def __init__(self, in_dim, hidden, out_dim, dropout=0.6, hops=20, ppr_alpha=0.1):
         super().__init__()
         self.enc = ODINNEncoder(in_dim, hidden, dropout)
         self.hops = int(hops)
-        self.weight_init = weight_init
         self.ppr_alpha = float(ppr_alpha)
-        self.nppr_alpha = float(nppr_alpha)
         self.alpha_raw = nn.Parameter(torch.empty(self.hops))
         self.reset_dynamics_parameters()
         self.out = nn.Linear(hidden, out_dim)
@@ -59,11 +56,17 @@ class ODINNDG(nn.Module):
 
     def reset_dynamics_parameters(self):
         with torch.no_grad():
-            self.alpha_raw.copy_(gpr_like_init(
-                self.hops, self.weight_init,
-                ppr_alpha=self.ppr_alpha, nppr_alpha=self.nppr_alpha,
-                device=self.alpha_raw.device, dtype=self.alpha_raw.dtype,
-            ))
+            self.alpha_raw.copy_(
+                ppr_init(
+                    self.hops,
+                    self.ppr_alpha,
+                    device=self.alpha_raw.device,
+                    dtype=self.alpha_raw.dtype,
+                )
+            )
+
+    def effective_alpha(self):
+        return self.alpha_raw
 
     def forward(self, x, edge_index):
         z = self.enc(x)
@@ -76,14 +79,21 @@ class ODINNDG(nn.Module):
 
 
 class ODINNFJ(nn.Module):
-    def __init__(self, in_dim, hidden, out_dim, dropout=0.6, hops=20,
-                 weight_init="ppr", ppr_alpha=0.1, nppr_alpha=-0.5):
+    def __init__(
+        self,
+        in_dim,
+        hidden,
+        out_dim,
+        dropout=0.6,
+        hops=20,
+        beta_center=0.5,
+        beta_std=0.01,
+    ):
         super().__init__()
         self.enc = ODINNEncoder(in_dim, hidden, dropout)
         self.hops = int(hops)
-        self.weight_init = weight_init
-        self.ppr_alpha = float(ppr_alpha)
-        self.nppr_alpha = float(nppr_alpha)
+        self.beta_center = float(beta_center)
+        self.beta_std = float(beta_std)
         self.beta_raw = nn.Parameter(torch.empty(max(0, self.hops - 1)))
         self.reset_dynamics_parameters()
         self.out = nn.Linear(hidden, out_dim)
@@ -95,11 +105,18 @@ class ODINNFJ(nn.Module):
         if self.beta_raw.numel() == 0:
             return
         with torch.no_grad():
-            self.beta_raw.copy_(gpr_like_init(
-                self.beta_raw.numel(), self.weight_init,
-                ppr_alpha=self.ppr_alpha, nppr_alpha=self.nppr_alpha,
-                device=self.beta_raw.device, dtype=self.beta_raw.dtype,
-            ))
+            self.beta_raw.copy_(
+                balanced_init(
+                    self.beta_raw.numel(),
+                    center=self.beta_center,
+                    std=self.beta_std,
+                    device=self.beta_raw.device,
+                    dtype=self.beta_raw.dtype,
+                )
+            )
+
+    def effective_beta(self):
+        return self.beta_raw
 
     def forward(self, x, edge_index):
         h = lazy_propagate(self.enc(x), edge_index)
@@ -112,7 +129,10 @@ class ODINNFJ(nn.Module):
 def build_odinn(name, in_dim, hidden, out_dim, dropout=0.6, hops=20):
     key = name.lower().replace("-", "").replace("_", "")
     if key in {"dg", "odinndg"}:
-        return ODINNDG(in_dim, hidden, out_dim, dropout, hops)
+        return ODINNDG(in_dim, hidden, out_dim, dropout, hops, ppr_alpha=0.1)
     if key in {"fj", "odinnfj"}:
-        return ODINNFJ(in_dim, hidden, out_dim, dropout, hops)
+        return ODINNFJ(
+            in_dim, hidden, out_dim, dropout, hops,
+            beta_center=0.5, beta_std=0.01,
+        )
     raise ValueError(f"Unknown ODINN variant: {name}")
