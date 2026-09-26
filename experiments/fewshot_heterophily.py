@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.data_heterophily import DATASETS, fewshot_split, load_dataset, set_seed
 from src.odinn_heterophily import build_odinn
+from src.odinn_weight_init import build_gpr_style_adam
 
 FIELDS = [
     "dataset", "model", "shots", "hops", "seed",
@@ -56,7 +57,9 @@ def train_one(model, data, masks, device, epochs, patience, lr, weight_decay):
     edge_index = data.edge_index.to(device)
     masks = {k: v.to(device) for k, v in masks.items()}
     model = model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = build_gpr_style_adam(
+        model, lr=lr, weight_decay=weight_decay, dynamics_weight_decay=0.0
+    )
 
     best_val_loss = float("inf")
     best_state = None
